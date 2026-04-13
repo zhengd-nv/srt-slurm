@@ -63,6 +63,28 @@ RANDOM_RANGE_RATIO=${12:-0.8}
 NUM_PROMPTS_MULT=${13:-10}
 NUM_WARMUP_MULT=${14:-2}
 
+# Optional SGLang /slow_down (set by srtctl for SA-Bench when YAML provides slow_down_* and frontend is sglang):
+#   SA_BENCH_SLOW_DOWN_URLS: comma-separated http://host:port base URLs (decode workers)
+#   SA_BENCH_SLOW_DOWN_SLEEP_TIME / SA_BENCH_SLOW_DOWN_WAIT_TIME
+SLOW_DOWN_ARGS=()
+if [ -n "${SA_BENCH_SLOW_DOWN_URLS:-}" ]; then
+    IFS=',' read -r -a _sd_urls <<< "${SA_BENCH_SLOW_DOWN_URLS}"
+    for u in "${_sd_urls[@]}"; do
+        u="$(echo "$u" | xargs)"
+        if [ -n "$u" ]; then
+            SLOW_DOWN_ARGS+=(--slow-down-server "$u")
+        fi
+    done
+fi
+if [ ${#SLOW_DOWN_ARGS[@]} -gt 0 ]; then
+    SLOW_DOWN_EXTRA=(
+        --slow-down-sleep-time "${SA_BENCH_SLOW_DOWN_SLEEP_TIME:-1}"
+        --slow-down-wait-time "${SA_BENCH_SLOW_DOWN_WAIT_TIME:-60}"
+    )
+else
+    SLOW_DOWN_EXTRA=()
+fi
+
 # Parse endpoint into host:port
 HOST=$(echo "$ENDPOINT" | sed 's|http://||' | cut -d: -f1)
 PORT=$(echo "$ENDPOINT" | sed 's|http://||' | cut -d: -f2 | cut -d/ -f1)
@@ -152,6 +174,8 @@ for concurrency in "${CONCURRENCY_LIST[@]}"; do
         --max-concurrency "$concurrency" \
         --trust-remote-code \
         --use-chat-template \
+        "${SLOW_DOWN_ARGS[@]}" \
+        "${SLOW_DOWN_EXTRA[@]}" \
         --save-result --result-dir "$result_dir" --result-filename "$result_filename"
     set +x
 
